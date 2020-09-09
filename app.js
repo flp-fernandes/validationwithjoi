@@ -1,6 +1,8 @@
 const express = require('express');
 const logger = require('morgan');
 const Joi = require('joi');
+const fs = require('fs');
+const path = require('path');
 
 const app = express();
 const PORT = process.env.NODE_ENV || 5000;
@@ -10,14 +12,41 @@ const Routes = require('./routes');
 app.set('port', PORT);
 
 // load app middlewares
-app.use(logger('dev'));
+
+// log only 4xx and 5xx responses to console
+app.use(logger('dev'), {
+    skip: function (req, res) {
+        return res.status < 400
+    }
+});
+
+// log all requests to access.log
+app.use(logger('common'), {
+    stream: fs.createWriteStream(path.join(__dirname, 'access.log'), {
+        flags: 'a'
+    })
+});
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
+/*
+app.use((req,res, next) => {
+    const method = req.method;
+    const endpoint = req.originalUrl;
+
+    res.on('finish', () => {
+        const status = res.status;
+        console.log(`Method: ${method} | Endpoint: ${endpoint} | Status: ${status}`);
+        next()
+    });
+})
+*/
 
 // load api routes
 app.use('/', Routes);
 
 // next() express use test
+/*
 app.get('/next', (req, res, next) => {
     console.log('next 1');
     next();
@@ -27,6 +56,7 @@ app.get('/next', (req, res) => {
     console.log('next 2');
     res.send({})
 })
+*/
 
 // testing joi validation
 app.post('/test', (req, res) => {
@@ -52,9 +82,6 @@ app.post('/test', (req, res) => {
     
     // validate the request data against the schema
     const { error, value } = schema.validate(data);
-    
-    // create a random number as id
-    const id = Math.ceil(Math.random() * 9999999);
 
     if (error) {
         // send 422 error response if validation fails
@@ -64,6 +91,9 @@ app.post('/test', (req, res) => {
             data: data
         })
     } else {
+        // create a random number as id
+        const id = Math.ceil(Math.random() * 9999999);
+        
         // send a success response if validation passes
         // attach the random ID to the data response
         res.send({
